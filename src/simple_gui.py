@@ -8,17 +8,14 @@ import plotly.graph_objs as go
 from tkinter import Tk
 from tkinter import filedialog
 
-from os import listdir
-from os.path import isfile, join
-import pandas as pd
+import os
 
 import numpy as np
 
 Tk().withdraw()
-path = filedialog.askdirectory()
-listdir(path)
-
-onlyfiles = [f for f in listdir(path) if isfile(join(path, f)) and f[-2:] == 'py']
+default_path = os.path.join(os.path.dirname(os.getcwd()),"records")
+path = filedialog.askdirectory(initialdir=default_path)
+only_files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f)) and f[-3:] == 'WAV']
 
 N = 100
 random_x = np.linspace(0, 1, N)
@@ -32,8 +29,8 @@ app.layout = html.Div([
     html.Label('Dropdown'),
     dcc.Dropdown(
         id='drop_down_files',
-        options=[{'label': f, 'value': f} for f in onlyfiles],
-        value=onlyfiles[0]
+        options=[{'label': f, 'value': f} for f in only_files],
+        value=only_files[0]
     ),
     dcc.Graph(
         id='graph_up',
@@ -61,7 +58,7 @@ app.layout = html.Div([
 def update_graph(input_value):
 
     random_x = np.linspace(0, 1, N)
-    if input_value == onlyfiles[0]:
+    if input_value == only_files[0]:
         random_y0 = np.random.randn(N) + 5
     else:
         random_y0 = np.random.randn(N) - 5

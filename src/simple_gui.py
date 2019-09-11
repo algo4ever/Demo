@@ -16,9 +16,10 @@ import wave
 
 '''
 TODO:
-1. find where to put the green rectangle.
+1. fix the fancy_measure function. which measure to use for audio files? what the technion guys used?
 2. understand why with maria'S records the graph is unreadable
 '''
+N_audio = 100000  # around 2 sec
 
 def get_data_from_audio_file(path_to_file):
     spf = wave.open(path_to_file, 'r')
@@ -29,41 +30,48 @@ def get_data_from_audio_file(path_to_file):
         channels[index % len(channels)].append(datum)
     fs = spf.getframerate()
     return channels[0], fs
+def calculate_rectangle(fancy_measure_audio):
+    MAX_CUTTER = 0.95   # avoiding picks
+    MIN_CUTTER = 0.0   # avoiding noise
+    FLAG_COUNTER = 10000  # for cold done
+    SKIP_BEGINNING = 100  # for wierd open the mic sounds
+    AMP_FOR_TRUE_RECTANGLE = 10000
+    AMP_FOR_FALSE_RECTANGLE = 0
+
+    max_amplitude = max(fancy_measure_audio[SKIP_BEGINNING:]) * MAX_CUTTER
+    threshold = max_amplitude * MIN_CUTTER
+    print(threshold, np.mean(fancy_measure_audio), max_amplitude, np.std(fancy_measure_audio))
+    y_rect = [AMP_FOR_FALSE_RECTANGLE]*SKIP_BEGINNING
+    flag = 0
+    for amp in fancy_measure_audio:
+        if 0 < flag:  # in cold-down
+            if flag == FLAG_COUNTER -1:
+                y_rect.append(AMP_FOR_FALSE_RECTANGLE)
+                flag = 0
+            else:
+                y_rect.append(AMP_FOR_FALSE_RECTANGLE)
+                flag += 1
+            continue
+        # here flag is 0
+        if amp < threshold and y_rect[-1]==1:  # exiting from a rectangle
+            y_rect.append(AMP_FOR_FALSE_RECTANGLE)
+            flag += 1
+        elif amp >= threshold:
+            y_rect.append(AMP_FOR_TRUE_RECTANGLE)
+        y_rect.append(AMP_FOR_FALSE_RECTANGLE)
+    return y_rect
+def fancy_measure(audio):
+    return [np.abs(y_val) for y_val in audio]
+
 
 
 Tk().withdraw()
 default_path = os.path.join(os.path.dirname(os.getcwd()),"records")
 path = filedialog.askdirectory(initialdir=default_path)
 only_files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f)) and f[-3:] == 'WAV']
-audio_values, fs = get_data_from_audio_file(os.path.join(path, only_files[1]))
-
-Time=np.linspace(0, len(audio_values)/fs, num=len(audio_values))
-
-if False:
-    plt.figure(1)
-    plt.title('Signal Wave...')
-    plt.plot(Time, audio_values)
-    plt.show()
 
 
-N_audio = 100000  # around 2 sec
-x = np.linspace(0, N_audio / fs, num=N_audio)
-Z1 = np.random.uniform(0.0, 2.0)
-Z2 = np.random.uniform(0.0, 2.0)
-if Z1 > Z2:
-    t = Z1
-    Z1 = Z2
-    Z2 = t
 
-y_rect = []
-for i in range(N_audio):
-    if i < Z1 * fs:
-        z = 0
-    elif i < Z2 * fs:
-        z = 10000
-    else:
-        z = 0
-    y_rect.append(z)
 
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
@@ -89,6 +97,7 @@ app.layout = html.Div([
 )
 def update_graph(input_value):
     y, fs = get_data_from_audio_file(os.path.join(path, input_value))
+    y_rect = calculate_rectangle(fancy_measure(y[:N_audio]))
     x = np.linspace(0, N_audio/fs, num=N_audio)
     fig_up = {
         "data": [go.Scatter(x=x, y=y[:N_audio],
@@ -98,7 +107,7 @@ def update_graph(input_value):
         "layout": {"title": {"text": "Up figure"}}
     }
     fig_down = {
-        "data": [go.Scatter(x=x, y=[np.abs(y_val) for y_val in y[:N_audio]],
+        "data": [go.Scatter(x=x, y=fancy_measure(y[:N_audio]),
                             mode='lines',
                             name='lines',
                             line={'color': 'red'}),

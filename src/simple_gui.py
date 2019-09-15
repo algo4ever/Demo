@@ -21,6 +21,14 @@ TODO:
 '''
 N_audio = 100000  # around 2 sec
 
+def normalize_signal(audio):
+    PERCENTILE = 98
+    percentile_amp = np.percentile(audio, PERCENTILE)
+    audio = audio/percentile_amp
+    audio = list(map(lambda x: x if x < 1 else 1, audio))
+    audio = list(map(lambda x: x if x > -1 else -1, audio))
+    audio = audio - np.mean(audio)
+    return audio
 def get_data_from_audio_file(path_to_file):
     spf = wave.open(path_to_file, 'r')
     signal = spf.readframes(-1)
@@ -30,39 +38,27 @@ def get_data_from_audio_file(path_to_file):
         channels[index % len(channels)].append(datum)
     fs = spf.getframerate()
     return channels[0], fs
-def calculate_rectangle(fancy_measure_audio):
-    MAX_CUTTER = 0.95   # avoiding picks
-    MIN_CUTTER = 0.0   # avoiding noise
-    FLAG_COUNTER = 10000  # for cold done
+def calculate_rectangle(audio, threshold=125):
     SKIP_BEGINNING = 100  # for wierd open the mic sounds
     AMP_FOR_TRUE_RECTANGLE = 10000
     AMP_FOR_FALSE_RECTANGLE = 0
-
-    max_amplitude = max(fancy_measure_audio[SKIP_BEGINNING:]) * MAX_CUTTER
-    threshold = max_amplitude * MIN_CUTTER
-    print(threshold, np.mean(fancy_measure_audio), max_amplitude, np.std(fancy_measure_audio))
+    WINDOW_SIZE = 2500
     y_rect = [AMP_FOR_FALSE_RECTANGLE]*SKIP_BEGINNING
-    flag = 0
-    for amp in fancy_measure_audio:
-        if 0 < flag:  # in cold-down
-            if flag == FLAG_COUNTER -1:
+    audio = normalize_signal(audio)
+
+    for window in range(SKIP_BEGINNING,len(audio),WINDOW_SIZE):
+        enr = calculate_energy(audio[window:window+WINDOW_SIZE])
+        if enr > threshold:
+            for i in range(WINDOW_SIZE):
+                y_rect.append(AMP_FOR_TRUE_RECTANGLE)
+        else:
+            for i in range(WINDOW_SIZE):
                 y_rect.append(AMP_FOR_FALSE_RECTANGLE)
-                flag = 0
-            else:
-                y_rect.append(AMP_FOR_FALSE_RECTANGLE)
-                flag += 1
-            continue
-        # here flag is 0
-        if amp < threshold and y_rect[-1]==1:  # exiting from a rectangle
-            y_rect.append(AMP_FOR_FALSE_RECTANGLE)
-            flag += 1
-        elif amp >= threshold:
-            y_rect.append(AMP_FOR_TRUE_RECTANGLE)
-        y_rect.append(AMP_FOR_FALSE_RECTANGLE)
     return y_rect
 def fancy_measure(audio):
     return [np.abs(y_val) for y_val in audio]
-
+def calculate_energy(audio):
+    return sum(np.power(audio,2))
 
 
 Tk().withdraw()
@@ -86,18 +82,28 @@ app.layout = html.Div([
         value=only_files[0]
     ),
     dcc.Graph(id='graph_up'),
-    dcc.Graph(id='graph_down')
+    dcc.Graph(id='graph_down'),
+    dcc.Slider(
+        id='thr-slider',
+        min=10,
+        max=500,
+        step=1,
+        value=175,
+    ),
+    html.Div(id='slider-str')
 ]
 )
 
 @app.callback(
     [Output(component_id='graph_up', component_property='figure'),
-     Output(component_id='graph_down', component_property='figure')],
-    [Input(component_id='drop_down_files', component_property='value')]
+     Output(component_id='graph_down', component_property='figure'),
+     Output(component_id='slider-str', component_property='children')],
+    [Input(component_id='drop_down_files', component_property='value'),
+     Input(component_id='thr-slider', component_property='value')]
 )
-def update_graph(input_value):
-    y, fs = get_data_from_audio_file(os.path.join(path, input_value))
-    y_rect = calculate_rectangle(fancy_measure(y[:N_audio]))
+def update_graph(drop_down_name, thr):
+    y, fs = get_data_from_audio_file(os.path.join(path, drop_down_name))
+    y_rect = calculate_rectangle(y[:N_audio], thr)
     x = np.linspace(0, N_audio/fs, num=N_audio)
     fig_up = {
         "data": [go.Scatter(x=x, y=y[:N_audio],
@@ -117,7 +123,7 @@ def update_graph(input_value):
                             line={'color': 'green'})],
         "layout": {"title": {"text": "down figure"}}
     }
-    return fig_up, fig_down
+    return fig_up, fig_down, 'threshold is "{}"'.format(thr)
 
 
 if __name__ == '__main__':

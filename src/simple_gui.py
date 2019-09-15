@@ -4,20 +4,15 @@ import dash_html_components as html
 from dash.dependencies import Input, Output
 
 import plotly.graph_objs as go
-import matplotlib.pyplot as plt
-
 
 from tkinter import Tk
 from tkinter import filedialog
 
 import os
 import numpy as np
-import wave
+import soundfile as sf
 
-'''
-TODO:
-2. understand why with maria'S records the graph is unreadable
-'''
+
 N_audio = 100000  # around 2 sec
 
 def normalize_signal(audio):
@@ -29,17 +24,16 @@ def normalize_signal(audio):
     audio = audio - np.mean(audio)
     return audio
 def get_data_from_audio_file(path_to_file):
-    spf = wave.open(path_to_file, 'r')
-    signal = spf.readframes(-1)
-    signal = np.fromstring(signal, 'Int16')
-    channels = [[] for channel in range(spf.getnchannels())]
-    for index, datum in enumerate(signal):
-        channels[index % len(channels)].append(datum)
-    fs = spf.getframerate()
-    return channels[0], fs
+    data, fs = sf.read(path_to_file, dtype='float32')
+    channell = []
+    channelr = []
+    for l, r in enumerate(data):
+        channell.append(l)
+        channelr.append(r[0])
+    return channelr, fs
 def calculate_rectangle(audio, threshold=125):
     SKIP_BEGINNING = 100  # for wierd open the mic sounds
-    AMP_FOR_TRUE_RECTANGLE = 10000
+    AMP_FOR_TRUE_RECTANGLE = 0.2
     AMP_FOR_FALSE_RECTANGLE = 0
     WINDOW_SIZE = 2500
     y_rect = [AMP_FOR_FALSE_RECTANGLE]*SKIP_BEGINNING

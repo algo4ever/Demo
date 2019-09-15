@@ -16,7 +16,6 @@ import wave
 
 '''
 TODO:
-1. fix the fancy_measure function. which measure to use for audio files? what the technion guys used?
 2. understand why with maria'S records the graph is unreadable
 '''
 N_audio = 100000  # around 2 sec
